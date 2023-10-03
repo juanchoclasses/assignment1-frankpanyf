@@ -28,6 +28,9 @@ import { ContributingUser } from "./ContributingUser";
  *
  */
 export class SpreadSheetController {
+    static spreadsheetFromJSON(documentJSON: string) {
+        throw new Error('Method not implemented.');
+    }
   /** The memory for the sheet */
   private _memory: SheetMemory;
 
@@ -307,20 +310,15 @@ export class SpreadSheetController {
    * clear the current formula
    * 
    */
-  clearFormula(user: string): void {
-    if (!this._contributingUsers.has(user)) {
-      return;
-    }
-    const userEditing = this._contributingUsers.get(user);
-    if (!userEditing) {
-      return;
-    }
-    if (userEditing.cellLabel === '') {
-      return;
-    }
+  const userEditing = this._contributingUsers.get(user);
 
-    userEditing.formulaBuilder.setFormula([]);
-    let cellBeingEdited = this._contributingUsers.get(user)?.cellLabel;
+  if (!userEditing!.isEditing) {
+  
+  return;
+  
+   }
+  
+  userEditing!.formulaBuilder.setFormula([]);
 
     // this should not empty but just in case throw error
     if (cellBeingEdited) {
