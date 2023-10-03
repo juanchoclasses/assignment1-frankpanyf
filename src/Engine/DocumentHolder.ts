@@ -27,6 +27,7 @@ import * as path from 'path';
 import { SpreadSheetController } from "./SpreadSheetController";
 
 
+
 export class DocumentHolder {
     private _documents: Map<string, SpreadSheetController>;
     // the document folder defaults to a folder called documents in the current directory
