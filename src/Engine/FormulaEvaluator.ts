@@ -3,9 +3,9 @@ import SheetMemory from "./SheetMemory"
 import { ErrorMessages } from "./GlobalDefinitions";
 
 
-
 export class FormulaEvaluator {
   // Define a function called update that takes a string parameter and returns a number
+
   private _errorOccured: boolean = false;
   private _errorMessage: string = "";
   private _currentFormula: FormulaType = [];
@@ -17,97 +17,84 @@ export class FormulaEvaluator {
     this._sheetMemory = memory;
   }
 
-/**
- * evaluate the formula and set the result and error message
- * @param formula - the formula to evaluate
- */
+  /**
+    * Evaluates a given formula.
+    * @param formula - The formula to evaluate, represented as an array of tokens.
+    */
 
   evaluate(formula: FormulaType) {
-
-// reset the error message and error flag
+    // Reset error flags and messages from previous evaluations
     this._errorOccured = false;
     this._errorMessage = "";
-
-// reset the formula
+    // Initialize stacks for values and operators
     const values: number[] = [];
     const operators: TokenType[] = [];
     const length = formula.length;
     let elementCounter = 0;
-
-// check if the formula is valid
+    // Check for invalid trailing operator
     if (formula.length > 3 && this.isOperator(formula[length - 1]) == true && this.isOperator(formula[length - 2]) == false) {
       formula = formula.slice(0, length - 1);
       this._errorMessage = ErrorMessages.invalidFormula;
       this._errorOccured = true;
     }
-
-// check missed expression error
-  if (formula.length === 2 && formula[0] === "(" && formula[1] === ")") {
-    this._errorMessage = ErrorMessages.missingParentheses;
-    this._errorOccured = true;
-    this._result = 0;
-    return;
-  }
-
-// check divide by zero error
-  if (Number(formula[length - 1]) == 0 && formula[length - 2] == "/") {
-    this._errorMessage = ErrorMessages.divideByZero;
-    this._errorOccured = true;
-    this._result = Infinity;
-    return;
-  }
-
-// check empty formula error
-  if (formula.length === 0) {
-    this._errorMessage = ErrorMessages.emptyFormula;
-    this._errorOccured = true;
-    return;
-  }
-
-//check if there is no integer in the formula
-  for (let j = 0; j < formula.length; j++) {
-    if (typeof Number(formula[j]) == "undefined") {
-      elementCounter = elementCounter + 1;
+    // Check for missing expression inside parentheses
+    if (formula.length === 2 && formula[0] === "(" && formula[1] === ")") {
+      this._errorMessage = ErrorMessages.missingParentheses;
+      this._errorOccured = true;
+      this._result = 0;
+      return;
     }
-  }
-  if (elementCounter == formula.length) {
-    this._errorMessage = ErrorMessages.invalidFormula;
-    this._errorOccured = true;
-    this._result = 0;
-    return;
-  }
-
-//the process of evaluating the formula
-  for (let i = 0; i < formula.length; i++) {
-    const token = formula[i];
-
-//push the number to the values array
-    if (this.isNumber(token)) {
-      values.push(Number(token));
-
-//get the value of the cell and push it to the values array
-    } else if (this.isCellReference(token)) {
-      const [value, error] = this.getCellValue(token);
-      if (error) {
-        this._errorMessage = error;
-        this._errorOccured = true;
-        return;
+    // Check for division by zero at the end of the formula
+    if (Number(formula[length - 1]) == 0 && formula[length - 2] == "/") {
+      this._errorMessage = ErrorMessages.divideByZero;
+      this._errorOccured = true;
+      this._result = Infinity;
+      return;
+    }
+    // Check for empty formula
+    if (formula.length === 0) {
+      this._errorMessage = ErrorMessages.emptyFormula;
+      this._errorOccured = true;
+      return;
+    }
+    //check for if no integers in the formula
+    for (let j = 0; j < formula.length; j++) {
+      if (typeof Number(formula[j]) == "undefined") {
+        elementCounter = elementCounter + 1;
       }
-      values.push(value);
-
-//push onto the operators array to fix opening parentheses
-    } else if (token === "(") {
-      operators.push(token);
-
-//evaluate the operators array to fix closing parentheses
-    } else if (token === ")") {
-      while (operators.length && operators[operators.length - 1] !== "(") {
-        this.evaluateOperator(values, operators);
-      }
-      operators.pop();
-
-//evaluate the operators array to fix the operators precedence} 
-    }   else if (this.isOperator(token)) {
+    }
+    if (elementCounter == formula.length) {
+      this._errorMessage = ErrorMessages.invalidFormula;
+      this._errorOccured = true;
+      this._result = 0;
+      return;
+    }
+    // Process each token in the formula
+    for (let i = 0; i < formula.length; i++) {
+      const token = formula[i];
+      // Push numbers onto the value stack
+      if (this.isNumber(token)) {
+        values.push(Number(token));
+        // Handle cell references by getting their values
+      } else if (this.isCellReference(token)) {
+        const [value, error] = this.getCellValue(token);
+        if (error) {
+          this._errorMessage = error;
+          this._errorOccured = true;
+          return;
+        }
+        values.push(value);
+        // Handle opening parentheses by pushing onto operator stack
+      } else if (token === "(") {
+        operators.push(token);
+        // Handle closing parentheses by evaluating operators until matching opening parentheses
+      } else if (token === ")") {
+        while (operators.length && operators[operators.length - 1] !== "(") {
+          this.evaluateOperator(values, operators);
+        }
+        operators.pop();  // remove "("
+        // Handle operators by evaluating higher precedence operators, then pushing onto operator stack
+      } else if (this.isOperator(token)) {
         while (
           operators.length &&
           this.precedence(operators[operators.length - 1]) >= this.precedence(token)
@@ -115,22 +102,19 @@ export class FormulaEvaluator {
           this.evaluateOperator(values, operators);
         }
         operators.push(token);
+        // Handle invalid tokens
 
-  //check invalid formula error
       } else {
         this._errorMessage = ErrorMessages.invalidFormula;
         this._errorOccured = true;
         return;
       }
     }
-
-//evaluate remaining operators
+    // Evaluate remaining operators
     while (operators.length) {
       this.evaluateOperator(values, operators);
     }
-
-
-//set the result to the final value, if the formula is invalid set the result to 0, or if the formula is empty set the result to 0
+    // Check for invalid final state, set result if valid, set error otherwise
     if (values.length !== 1 || isNaN(values[0])) {
       this._errorMessage = this._errorMessage || ErrorMessages.invalidFormula;
       this._result = Number(formula[0]);
@@ -146,25 +130,27 @@ export class FormulaEvaluator {
 
   }
 
+
   /**
-   * @returns error message if an error occured
-   */
+    * @returns The error message from the last evaluation, if any.
+    */
+
   public get error(): string {
     return this._errorMessage
   }
-
   /**
-   * @returns the result of the evaluation
+   * @returns The result of the last evaluation.
    */
-   public get result(): number {
+  public get result(): number {
     return this._result;
   }
+  /**
+     * Evaluates the top operator on the operators stack with the top two
+     * values on the values stack.
+     * @param values - The stack of values.
+     * @param operators - The stack of operators.
+     */
 
-/**
- * use the top two values in the values array and the top operator in the operators array to evaluate the expression
- * @param values - the values array
- * @param operators - array of operators
- */
   private evaluateOperator(values: number[], operators: TokenType[]) {
     const operator = operators.pop();
     const operand2 = values.pop();
@@ -180,33 +166,32 @@ export class FormulaEvaluator {
         case "*":
           values.push(operand1 * operand2);
           break;
-          case "/":
-            if (operand2 == 0) {
-              this._errorMessage = ErrorMessages.divideByZero;
-              this._errorOccured = true;
-              this._result = Infinity;
-              break
-            } else {
-              values.push(operand1 / operand2);
-            }
-            break;
-          default:
-            this._errorMessage = ErrorMessages.invalidOperator;
+        case "/":
+          if (operand2 == 0) {
+            this._errorMessage = ErrorMessages.divideByZero;
             this._errorOccured = true;
-            break;
-        }
-      } else {
-        this._errorMessage = ErrorMessages.invalidOperator;
-        this._errorOccured = true;
+            this._result = Infinity;
+            break
+          } else {
+            values.push(operand1 / operand2);
+          }
+          break;
+        default:
+          this._errorMessage = ErrorMessages.invalidOperator;
+          this._errorOccured = true;
+          break;
       }
+    } else {
+      this._errorMessage = ErrorMessages.invalidOperator;
+      this._errorOccured = true;
     }
-
+  }
   /**
-   * Determines the precedence of an operator
-   * @param operator - the operator to check
-   * @returns - true if the operator is valid
+   * Determines the precedence level of a given operator.
+   * @param operator - The operator whose precedence level is to be determined.
+   * @returns The precedence level of the operator.
    */
-   private precedence(operator: TokenType): number {
+  private precedence(operator: TokenType): number {
     switch (operator) {
       case "+":
       case "-":
@@ -218,22 +203,19 @@ export class FormulaEvaluator {
         return 0;
     }
   }
-
-/**
- * checks if the token is an operator
- * @param token - the token to check
- * @returns - true if the token is an operator
- */
+  /**
+   * Checks if a given token is an operator.
+   * @param token - The token to check.
+   * @returns true if the token is an operator, false otherwise.
+   */
   private isOperator(token: TokenType): boolean {
     return ["+", "-", "*", "/"].includes(token);
   }
-
   /**
    * 
    * @param token 
    * @returns true if the toke can be parsed to a number
    */
-  
   isNumber(token: TokenType): boolean {
     return !isNaN(Number(token));
   }
@@ -248,6 +230,7 @@ export class FormulaEvaluator {
 
     return Cell.isValidCellLabel(token);
   }
+
 
   /**
    * 
